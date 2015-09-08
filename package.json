@@ -1,0 +1,25 @@
+{
+  "name": "nij",
+  "version": "0.0.0",
+  "description": "nodeinfo.json editor/manager",
+  "bin": "./bin.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/clehner/nij.git"
+  },
+  "keywords": [
+    "nodeinfo.json",
+    "cjdns"
+  ],
+  "author": "Charles Lehner <cel@celehner.com> (http://celehner.com/)",
+  "license": "Fair",
+  "bugs": {
+    "url": "https://github.com/clehner/nij/issues"
+  },
+  "dependencies": {
+    "minimist": "^1.2.0"
+  }
+}
