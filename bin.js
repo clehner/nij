@@ -11,14 +11,18 @@ var mktemp = require("mktemp");
 var confDir = process.env.XDG_CONFIG_HOME || (process.env.HOME + "/.config");
 var confFile = confDir + "/nij.json";
 var conf;
+var binName = pkg.name;
 var defaultName = "default";
 var defaultEditor = "vi";
 
 /* read/write config fns */
 
 function readConfSync() {
-	return !fs.existsSync(confFile) ? {} :
+	conf = !fs.existsSync(confFile) ? {} :
 		JSON.parse(fs.readFileSync(confFile));
+	if (!conf.infos)
+		conf.infos = {};
+	return conf;
 }
 
 function writeConfSync() {
@@ -63,8 +67,7 @@ function writeFile(url, data, cb) {
 			var host = (parts.auth ? parts.auth + "@" : "") + parts.host;
 			return writeFileScp(host, parts.path, data, cb);
 		case null:
-			fs.readFile(parts.path, {encoding: "ascii"}, cb);
-			break;
+			return fs.writeFile(parts.path, data, cb);
 		default:
 			throw new Error("Unknown protocol " + parts.protocol);
 	}
@@ -73,7 +76,7 @@ function writeFile(url, data, cb) {
 /* Higher-level read/write fns */
 
 function saveInfo(name, info) {
-	var item = conf[name];
+	var item = conf.infos[name];
 	info.last_modified = new Date().toISOString();
 	var data = JSON.stringify(info, null, 3);
 	writeFile(item.path, data, function (err) {
@@ -86,9 +89,13 @@ function saveInfo(name, info) {
 }
 
 function getInfo(name, cb) {
-	var item = conf[name];
+	var item = conf.infos[name];
 	if (!item) {
-		console.error("No info for name \"" + name + "\"");
+		if (name == defaultName) {
+			console.error("No info. Run '" + binName + " init'");
+		} else {
+			console.error("No info for '" + name + "'");
+		}
 		process.exit(1);
 	}
 	readFile(item.path, function (err, data) {
@@ -117,7 +124,7 @@ function editFile(path, data, cb) {
 
 		var newData = fs.readFileSync(path);
 		if (newData == data) {
-			console.log("Data is unchanged.");
+			/* Data is unchanged. */
 			return;
 		}
 
@@ -128,7 +135,7 @@ function editFile(path, data, cb) {
 			console.error("Data is not valid JSON.");
 			var resp;
 			do {
-				resp = promptSync("Re-edit? [Y/n]");
+				resp = promptSync("Re-edit? [Y/n] ");
 				if (/^y/i.test(resp))
 					return editFile(path, data, cb);
 			} while (!/^n/.test(resp));
@@ -139,56 +146,154 @@ function editFile(path, data, cb) {
 	}
 }
 
+/* Validation */
+
+function checkService(srv, i) {
+	if (!srv.name)
+		console.log("Service", i, "missing name");
+	var uris = srv.uris;
+	if (uris) {
+		if (srv.uri)
+			console.log("Service", i, "has both uri and uris");
+		if (typeof uris != "object")
+			console.log("Service", i, "has invalid uris");
+	} else if (!srv.uri)
+		console.log("Service", i, "missing uri/uris");
+}
+
+function checkInfo(info) {
+	/* TODO: use a JSON schema validator */
+	if (!info.key)
+		console.log("Missing key");
+	else if (!/[0-9a-z]{52}\.k/.test(info.key))
+		console.log("Invalid key");
+
+	if (!info.hostname)
+		console.log("Missing hostname");
+
+	if (!info.ip)
+		console.log("Missing ip");
+	else if (!/^fc[0-9a-f]{,37}/.test(info.ip))
+		console.log("Invalid ip");
+
+	var contact = info.contact;
+	if (!contact)
+		console.log("Missing contact");
+	else {
+		if (typeof contact == "object" && !contact.name && !contact.email)
+			console.log("Missing contact name/email");
+	}
+
+	var pgp = contact && contact.pgp || info.pgp;
+	if (!pgp)
+		console.log("Missing pgp");
+	else {
+		if (!pgp.fingerprint)
+			console.log("Missing pgp fingerprint");
+		if (!pgp.keyserver && !pgp.full)
+			console.log("Missing pgp keyserver/url");
+	}
+
+	var services = services;
+	if (services) {
+		if (typeof services != "object")
+			console.log("Invalid services");
+		else if (services[0])
+			services.forEach(checkService);
+	}
+}
+
 /* Commands */
 
 function usage() {
 	console.log([
-		"Usage: " + pkg.name + " <command> [<arguments>]",
-		"Commands:",
-		"    ls|init|del|cat|touch|check [<name>]",
-		"    get|edit [-r <name>] [<property>]",
-		"    set [-r <name>] [<property> [<value>]]",
+		"Usage: " + binName + " <command> [<arguments>]",
+		"Commands for managing:",
+		"    ls",
+		"    init",
+		"    add <path>",
+		"    remove",
+		"    check",
+		"Commands for editing:",
+		"    touch",
+		"    get [<property>]",
+		"    set [<property> [<value>]]",
+		"    edit [<property>]",
+		"Options:",
+		"    -r <name>       remote name",
 	].join("\n"));
 }
 
 var commands = {
-	ls: function (argv) {
-		if (argv.h) {
-			console.log("Usage: " + pkg.name + " ls");
-			return;
+	ls: function () {
+		for (var name in conf.infos) {
+			var info = conf.infos[name];
+			console.log(name + "\t" + info.path);
 		}
-		console.log(conf);
 	},
 
 	init: function (argv) {
-		console.log(argv);
+		var name = argv.remote || defaultName;
+		var info = conf.infos[name] || {
+		};
+		/* TODO */
+		conf.infos[name] = info;
 	},
 
-	del: function (argv) {
-		console.log(argv);
+	add: function (argv) {
+		var name = argv.remote || defaultName;
+		var path = argv._[0];
+		if (!path || argv.help) {
+			console.log("Usage: " + binName + " add [-r <remote>] <path>");
+			process.exit(argv.help ? 0 : 1);
+		}
+
+		if (conf.infos[name]) {
+			console.error("Remote", name, "already exists");
+			process.exit(1);
+		}
+
+		conf.infos[name] = {
+			path: path
+		};
+		console.log("Remote added");
+		writeConfSync();
 	},
 
-	cat: function (argv) {
-		var name = argv._[0] || defaultName;
-		getInfo(name, console.log.bind(console));
-	},
-
-	touch: function (argv) {
-		var name = argv._[0] || defaultName;
-		getInfo(name, saveInfo.bind(this, name));
+	remove: function (argv) {
+		var name = argv.remote || defaultName;
+		if (!(name in conf.infos)) {
+			console.log("'" + name + "' not in config");
+			return;
+		}
+		delete conf.infos[name];
+		writeConfSync();
 	},
 
 	check: function (argv) {
-		console.log(argv);
+		var name = argv.remote || defaultName;
+		getInfo(name, checkInfo);
+	},
+
+	touch: function (argv) {
+		var name = argv.remote || defaultName;
+		getInfo(name, saveInfo.bind(this, name));
 	},
 
 	get: function (argv) {
-		console.log(argv);
+		var name = argv.remote || defaultName;
+		var property = argv._[0];
+
+		getInfo(name, function (info) {
+			var obj = (property == null) ? info : info[property];
+			var data = JSON.stringify(obj, null, 3);
+			console.log(data);
+		});
 	},
 
 	edit: function (argv) {
-		var name = argv._[0] || defaultName;
-		var property = argv._[1];
+		var name = argv.remote || defaultName;
+		var property = argv._[0];
 
 		getInfo(name, function (info) {
 			var name2 = name.replace(/\//g, "-");
@@ -209,9 +314,9 @@ var commands = {
 	},
 
 	set: function (argv) {
-		var name = argv._[0] || defaultName;
-		var property = argv._[1];
-		var value = argv._[2];
+		var name = argv.remote || defaultName;
+		var property = argv._[0];
+		var value = argv._[1];
 
 		if (property == null && value == null) {
 			var info = JSON.parse(fs.readFileSync("/dev/stdin"));
