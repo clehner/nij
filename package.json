@@ -20,6 +20,8 @@
     "url": "https://github.com/clehner/nij/issues"
   },
   "dependencies": {
-    "minimist": "^1.2.0"
+    "minimist": "^1.2.0",
+    "mktemp": "^0.4.0",
+    "sync-prompt": "^0.4.2"
   }
 }
