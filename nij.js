@@ -193,17 +193,10 @@ function initInfo(cb) {
 					return resolve();
 				info.ip = m[1];
 
-				var cexec = "/opt/cjdns/tools/cexec";
-				if (!fs.existsSync(cexec))
-					return resolve();
-				childProc.execFile(cexec, [
-					'NodeStore_nodeForAddr("' + info.ip + '")'
-				], asciiEnc, function (err, stdout) {
-					if (!err) try {
-						var data = JSON.parse(stdout);
-						info.key = data.result.key;
-					} catch(e) {}
-					return resolve();
+				getKey(info.ip, function (key) {
+					if (key)
+						info.key = key;
+					resolve();
 				});
 			}
 		)
@@ -223,6 +216,21 @@ function initInfo(cb) {
 
 		cb(info);
 	}
+}
+
+function getKey(ip, cb) {
+	var Cjdns;
+	try {
+		Cjdns = require("/opt/cjdns/contrib/nodejs/cjdnsadmin/cjdnsadmin");
+	} catch(e) {
+		return cb(null);
+	}
+	Cjdns.connectAsAnon(function (cjdns) {
+		cjdns.NodeStore_nodeForAddr(ip, function (err, resp) {
+			cb(resp && resp.result && resp.result.key);
+			cjdns.disconnect();
+		});
+	});
 }
 
 /* Editing */
