@@ -4,6 +4,10 @@
 
 [nodeinfo.json]: https://docs.meshwith.me/en/cjdns/nodeinfo.json.html
 
+## Install
+
+    npm install -g nij
+
 ## Todo
 
 - Support notifying servers after updating a nodeinfo.json file
