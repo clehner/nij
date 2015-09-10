@@ -447,7 +447,7 @@ var commands = {
 	ls: function (argv) {
 		if (argv._.length || argv.help) {
 			console.log("Usage:", binName, "ls");
-			process.exit(argv.help ? 0 : 1);
+			return argv.help ? 0 : 1;
 		}
 
 		for (var name in conf.infos) {
@@ -461,12 +461,12 @@ var commands = {
 		var path = argv._.shift();
 		if (!name || !path || argv._.length || argv.help) {
 			console.log("Usage:", binName, "add <name> <path>");
-			process.exit(argv.help ? 0 : 1);
+			return argv.help ? 0 : 1;
 		}
 
 		if (conf.infos[name]) {
 			console.error("Remote", name, "already exists");
-			process.exit(1);
+			return 1;
 		}
 
 		conf.infos[name] = {
@@ -479,7 +479,7 @@ var commands = {
 		var names = argv._;
 		if (!names.length || argv.help) {
 			console.log("Usage:", binName, "rm <name>...");
-			process.exit(argv.help ? 0 : 1);
+			return argv.help ? 0 : 1;
 		}
 
 		filterRemotes(names).forEach(function (name) {
@@ -493,17 +493,17 @@ var commands = {
 		var to = argv._.shift();
 		if (argv._.length || argv.help) {
 			console.log("Usage:", binName, "rename <old> <new>");
-			process.exit(argv.help ? 0 : 1);
+			return argv.help ? 0 : 1;
 		}
 
 		if (!conf.infos[from]) {
 			console.error("Remote", from, "doesn't exist");
-			process.exit(1);
+			return 1;
 		}
 
 		if (conf.infos[to]) {
 			console.error("Remote", to, "already exists");
-			process.exit(1);
+			return 1;
 		}
 
 		conf.infos[to] = conf.infos[from];
@@ -514,7 +514,7 @@ var commands = {
 	check: function (argv) {
 		if (argv.help) {
 			console.log("Usage:", binName, "check [<name>]...");
-			process.exit(argv.help ? 0 : 1);
+			return argv.help ? 0 : 1;
 		}
 
 		filterRemotes(argv._).forEach(function (name) {
@@ -526,7 +526,7 @@ var commands = {
 		var name = argv._.shift();
 		if (argv._.length || argv.help) {
 			console.log("Usage:", binName, "init [<name>]");
-			process.exit(argv.help ? 0 : 1);
+			return argv.help ? 0 : 1;
 		}
 
 		if (!name) try {
@@ -592,7 +592,7 @@ var commands = {
 		var name = argv._.shift();
 		if (argv._.length || argv.help) {
 			console.log("Usage:", binName, "put <name>");
-			process.exit(argv.help ? 0 : 1);
+			return argv.help ? 0 : 1;
 		}
 
 		var data = fs.readFileSync("/dev/stdin");
@@ -601,7 +601,7 @@ var commands = {
 			info = JSON.parse(data);
 		} catch(e) {
 			console.log("Data is not valid JSON.");
-			process.exit(1);
+			return 1;
 		}
 		saveInfo(name, info);
 	},
@@ -663,7 +663,9 @@ var argv = minimist(process.argv.slice(2), {
 var cmd = argv._.shift();
 if (Object.hasOwnProperty.call(commands, cmd)) {
 	conf = readConfSync();
-	commands[cmd](argv);
+	var ret = commands[cmd](argv);
+	if (ret != null)
+		process.exit(ret);
 } else {
 	usage();
 	process.exit(1);
