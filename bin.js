@@ -182,7 +182,7 @@ function checkInfo(info) {
 
 	if (!info.ip)
 		console.log("Missing ip");
-	else if (!/^fc[0-9a-f]{,37}/.test(info.ip))
+	else if (!/^fc[0-9a-f:]*$/.test(info.ip))
 		console.log("Invalid ip");
 
 	var contact = info.contact;
