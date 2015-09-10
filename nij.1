@@ -17,13 +17,13 @@
 .Sh SYNOPSIS
 .Nm nij ls
 .Nm nij Op Fl r Ar name
-.Ic init
-.Nm nij Op Fl r Ar name
 .Ic add Ar path
 .Nm nij Op Fl r Ar name
 .Ic rm
 .Nm nij Op Fl r Ar name
 .Ic check
+.Nm nij Op Fl r Ar name
+.Ic init
 .Nm nij Op Fl r Ar name
 .Ic touch
 .Nm nij Op Fl r Ar name
@@ -35,6 +35,75 @@
 .Sh DESCRIPTION
 .Nm
 is a command-line program for managing nodeinfo.json files.
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl r Ar name
+Name which nodeinfo.json file to use
+.It Fl h
+Get help with a command
+.El
+.Sh COMMANDS
+.Bl -tag -width Ds
+.It Ic ls
+List remotes, which are mappings of names to path names of nodeinfo.json files.
+.It Ic add Ar path
+Add a nodeinfo.json file to the remotes list.
+.Ar path
+may be a pathname or a URL of the form
+scp://host/path
+.It Ic rm
+Remove a nodeinfo.json file from the remotes list.
+.It Ic check
+Validate the nodeinfo.json file.
+.It Ic init
+Interactively create or update nodeinfo.json data
+.It Ic touch
+Update the modification data in the node info.
+.It Ic get Op Ar property
+Get the value of a JSON property of the nodeinfo.json file. If
+.Ar property
+is omitted, get the contents of the whole file.
+.It Ic set Op Ar property Op Ar value
+Set a property of the nodeinfo.json file to
+.Ar value .
+If
+.Ar property
+is omitted, the entire contents of the file are replaced. If
+.Ar value
+is omitted, the value to use is read from stdin.
+.It Ic edit Op Ar property
+Edit the nodeinfo.json file using your
+.Ev EDITOR or
+.Xr vi 1 . After editing, if the file is not valid JSON, the user is prompted
+to re-edit it. Before saving, the last_modified property is set to the current
+time.
+.El
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa ~/.config/nij.json
+This file stores
+.Nm
+\(aqs remotes list, in JSON format. It may be updated by the commands
+.Ic add ,
+.Ic init ,
+and
+.Ic rm .
+.El
+.Sh EXAMPLES
+Add a remote:
+.Dl nij add -r foo scp://me@example.org//var/www/nodeinfo.json
+.Pp
+Interactively set up the nodeinfo.json file for remote
+.Ar foo :
+.Dl nij init -r foo
+.Pp
+Edit the nodeinfo.json file using
+.Ev EDITOR :
+.Dl nij edit -r foo
+.Pp
+Set the hostname for
+.Ar foo :
+.Dl nij -r foo set hostname foo.example.org
 .Sh AUTHOR
 .Nm
 was written by

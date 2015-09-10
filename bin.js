@@ -425,38 +425,6 @@ var commands = {
 		}
 	},
 
-	init: function (argv) {
-		checkArg1("init", argv);
-
-		var name = argv.remote || defaultName;
-		var item = conf.infos[name];
-		var oldPath = item ? item.path : findNodeInfoFile();
-		var path;
-		try {
-			path = promptSyncDefault("Path to nodeinfo.json", oldPath);
-		} catch(e) {
-			handleEOF(e);
-		}
-		if (!item) {
-			item = conf.infos[name] = {};
-		}
-		if (path != item.path) {
-			item.path = path;
-			writeConfSync();
-		}
-		getInfo(name, function (info) {
-			if (!info)
-				initInfo(next);
-			else
-				next(info);
-		});
-
-		function next(info) {
-			initInteractive(info);
-			saveInfo(name, info, true);
-		}
-	},
-
 	add: function (argv) {
 		var name = argv.remote || defaultName;
 		var path = argv._[0];
@@ -492,6 +460,38 @@ var commands = {
 		checkArg1("check", argv);
 		var name = argv.remote || defaultName;
 		getInfo(name, checkInfo);
+	},
+
+	init: function (argv) {
+		checkArg1("init", argv);
+
+		var name = argv.remote || defaultName;
+		var item = conf.infos[name];
+		var oldPath = item ? item.path : findNodeInfoFile();
+		var path;
+		try {
+			path = promptSyncDefault("Path to nodeinfo.json", oldPath);
+		} catch(e) {
+			handleEOF(e);
+		}
+		if (!item) {
+			item = conf.infos[name] = {};
+		}
+		if (path != item.path) {
+			item.path = path;
+			writeConfSync();
+		}
+		getInfo(name, function (info) {
+			if (!info)
+				initInfo(next);
+			else
+				next(info);
+		});
+
+		function next(info) {
+			initInteractive(info);
+			saveInfo(name, info, true);
+		}
 	},
 
 	touch: function (argv) {
