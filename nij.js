@@ -117,13 +117,18 @@ function getInfo(name, cb) {
 	}
 
 	readFile(item.path, function (err, data) {
+		if (err) {
+			if (err.signal == "SIGINT") {
+				console.error("Interrupted");
+				process.exit(1);
+			} else {
+				console.error("Error reading info");
+				throw err;
+			}
+		}
 		if (!data)
 			return cb(null);
 		var info = JSON.parse(data);
-		if (err) {
-			console.error("Error reading info");
-			throw err;
-		}
 		cb(info);
 	});
 }
