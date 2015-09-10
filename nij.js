@@ -218,6 +218,7 @@ function initInfo(cb) {
 	}
 }
 
+/* Get public key of currently-running cjdroute */
 function getKey(ip, cb) {
 	var Cjdns;
 	try {
@@ -225,12 +226,21 @@ function getKey(ip, cb) {
 	} catch(e) {
 		return cb(null);
 	}
-	Cjdns.connectAsAnon(function (cjdns) {
+	childProc.execFile("/bin/pidof", ["cjdroute"], function (err) {
+		if (err)
+			cb(null);
+		else if (fs.existsSync(process.env.HOME + '/.cjdnsadmin'))
+			Cjdns.connectWithAdminInfo(next);
+		else
+			Cjdns.connectAsAnon(next);
+	});
+
+	function next(cjdns) {
 		cjdns.NodeStore_nodeForAddr(ip, function (err, resp) {
 			cb(resp && resp.result && resp.result.key);
 			cjdns.disconnect();
 		});
-	});
+	}
 }
 
 /* Editing */
