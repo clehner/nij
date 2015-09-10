@@ -166,7 +166,7 @@ function initInfo(cb) {
 						if (m) {
 							key = m[1].replace(/ /g, "");
 						}
-						pgp.key = key;
+						pgp.fingerprint = key;
 						resolve();
 					}
 				);
@@ -194,7 +194,7 @@ function initInfo(cb) {
 		if (contact.name || contact.email)
 			info.contact = contact;
 
-		if (pgp.keyserver || pgp.key)
+		if (pgp.keyserver || pgp.fingerprint)
 			info.pgp = pgp;
 
 		cb(info);
@@ -215,7 +215,7 @@ function editFile(path, data, cb) {
 			return;
 		}
 
-		var newData = fs.readFileSync(path);
+		var newData = fs.readFileSync(path, asciiEnc);
 		if (newData == data) {
 			/* Data is unchanged. */
 			fs.unlink(path);
@@ -223,18 +223,14 @@ function editFile(path, data, cb) {
 		}
 
 		var info;
-		try {
+		if (newData) try {
 			info = JSON.parse(newData);
 		} catch(e) {
 			console.error("Data is not valid JSON.");
-			var resp;
-			do {
-				resp = promptSync("Re-edit? [Y/n] ");
-				if (/^y/i.test(resp))
-					return editFile(path, data, cb);
-			} while (!/^n/.test(resp));
-			fs.unlink(path);
-			return;
+			if (promptYesNoSync("Re-edit?"))
+				return editFile(path, data, cb);
+			else
+				return fs.unlink(path);
 		}
 
 		fs.unlink(path);
@@ -299,11 +295,89 @@ function checkInfo(info) {
 	}
 }
 
+/* Prompting */
+
+function EOFError() {}
+EOFError.prototype = new Error();
+
+function handleEOF(e) {
+	if (e instanceof EOFError) {
+		process.stdout.write("\n");
+		process.exit(130);
+	} else {
+		throw e;
+	}
+}
+
+function promptYesNoSync(prompt) {
+	var resp;
+	do {
+		resp = promptSync(prompt + " [Y/n] ");
+		if (promptSync.isEOF())
+			throw new EOFError();
+		if (!resp)
+			return true;
+		if (/^y/i.test(resp))
+			return true;
+	} while (!/^n/.test(resp));
+	return false;
+}
+
+function promptSyncDefault(prompt, value) {
+	if (promptSync.isEOF())
+		throw new EOFError();
+	return value ?
+		promptSync(prompt + ": [" + value + "] ") || value :
+		promptSync(prompt + ": ") || undefined;
+}
+
+function initInteractive(info) {
+	info.hostname = promptSyncDefault("Hostname", info.hostname);
+	info.ip = promptSyncDefault("cjdns IP", info.ip);
+
+	var contact = info.contact || {};
+	if ([
+		contact.name = promptSyncDefault("Contact name", contact.name),
+		contact.email = promptSyncDefault("Contact email", contact.email),
+		contact.irc = promptSyncDefault("IRC", contact.xmpp),
+		contact.xmpp = promptSyncDefault("XMPP", contact.xmpp),
+		contact.bitmessage = promptSyncDefault("Bitmessage",
+			contact.bitmessage)
+	].some(Boolean))
+		info.contact = contact;
+
+	var pgp = contact.pgp || info.pgp || {};
+	if ([
+		pgp.fingerprint =
+			promptSyncDefault("PGP key fingerprint", pgp.fingerprint),
+		pgp.keyserver =
+			promptSyncDefault("PGP keyserver", pgp.keyserver || pgp.full)
+	].some(Boolean) && !contact.pgp)
+		info.pgp = pgp;
+}
+
+
+function findNodeInfoFile() {
+	/* Try to find an already-existing nodeinfo.json */
+	return [
+		process.env.HOME + "/www/nodeinfo.json",
+		"/srv/http/nodeinfo.json",
+		"/var/www/nodeinfo.json"
+	].filter(fs.existsSync)[0];
+}
+
 /* Commands */
+
+function checkArg1(name, argv) {
+	if (argv._.length || argv.help) {
+		console.log("Usage:", binName, name, "[-r <remote>]");
+		process.exit(argv.help ? 0 : 1);
+	}
+}
 
 function usage() {
 	console.log([
-		"Usage: " + binName + " <command> [<arguments>]",
+		"Usage:" + binName + " <command> [<arguments>]",
 		"Commands for managing:",
 		"    ls",
 		"    init",
@@ -321,7 +395,12 @@ function usage() {
 }
 
 var commands = {
-	ls: function () {
+	ls: function (argv) {
+		if (argv._.length || argv.help) {
+			console.log("Usage:", binName, "ls");
+			process.exit(argv.help ? 0 : 1);
+		}
+
 		for (var name in conf.infos) {
 			var info = conf.infos[name];
 			console.log(name + "\t" + info.path);
@@ -329,15 +408,43 @@ var commands = {
 	},
 
 	init: function (argv) {
+		checkArg1("init", argv);
+
 		var name = argv.remote || defaultName;
-		if (conf.infos[name])
-			getInfo(name, next);
-		else
-			initInfo(next);
+		var item = conf.infos[name];
+		var oldPath = item ? item.path : findNodeInfoFile();
+		var path;
+		try {
+			path = promptSyncDefault("Path to nodeinfo.json", oldPath);
+		} catch(e) {
+			handleEOF(e);
+		}
+		if (!item) {
+			item = conf.infos[name] = {};
+		}
+		if (path != item.path) {
+			item.path = path;
+			writeConfSync();
+		}
+		getInfo(name, function (info) {
+			if (!info)
+				initInfo(next);
+			else
+				next(info);
+		});
 
 		function next(info) {
-			conf.infos[name] = info;
-			console.log(JSON.stringify(info, null, 3));
+			try {
+				initInteractive(info);
+				console.log("About to write to " + path + ":");
+				console.log(info);
+				if (!promptYesNoSync("Is this ok?"))
+					console.log("Cancelling");
+				else
+					saveInfo(name, info);
+			} catch(e) {
+				handleEOF(e);
+			}
 		}
 	},
 
@@ -345,7 +452,7 @@ var commands = {
 		var name = argv.remote || defaultName;
 		var path = argv._[0];
 		if (!path || argv.help) {
-			console.log("Usage: " + binName + " add [-r <remote>] <path>");
+			console.log("Usage:", binName, "add [-r <remote>] <path>");
 			process.exit(argv.help ? 0 : 1);
 		}
 
@@ -361,6 +468,8 @@ var commands = {
 	},
 
 	rm: function (argv) {
+		checkArg1("rm", argv);
+
 		var name = argv.remote || defaultName;
 		if (!(name in conf.infos)) {
 			console.log("'" + name + "' not in config");
@@ -371,16 +480,23 @@ var commands = {
 	},
 
 	check: function (argv) {
+		checkArg1("check", argv);
 		var name = argv.remote || defaultName;
 		getInfo(name, checkInfo);
 	},
 
 	touch: function (argv) {
+		checkArg1("touch", argv);
 		var name = argv.remote || defaultName;
 		getInfo(name, saveInfo.bind(this, name));
 	},
 
 	get: function (argv) {
+		if (argv._.length > 1 || argv.help) {
+			console.log("Usage:", binName, "get [-r <remote>] [<property>]");
+			process.exit(argv.help ? 0 : 1);
+		}
+
 		var name = argv.remote || defaultName;
 		var property = argv._[0];
 
@@ -392,6 +508,11 @@ var commands = {
 	},
 
 	edit: function (argv) {
+		if (argv._.length > 1 || argv.help) {
+			console.log("Usage:", binName, "edit [-r <remote>] [<property>]");
+			process.exit(argv.help ? 0 : 1);
+		}
+
 		var name = argv.remote || defaultName;
 		var property = argv._[0];
 
@@ -400,7 +521,7 @@ var commands = {
 			var template = "/tmp/nodeinfo-" + name2 + "-XXXXXXX.json";
 			var path = mktemp.createFileSync(template);
 			var obj = (property == null) ? info : info[property];
-			var data = JSON.stringify(obj, null, 3);
+			var data = (obj == null) ? "" : JSON.stringify(obj, null, 3);
 			fs.writeFileSync(path, data);
 
 			editFile(path, data, function (obj) {
@@ -414,6 +535,12 @@ var commands = {
 	},
 
 	set: function (argv) {
+		if (argv._.length > 2 || argv.help) {
+			console.log("Usage:", binName,
+				"set [-r <remote>] [<property> [<value>]]");
+			process.exit(argv.help ? 0 : 1);
+		}
+
 		var name = argv.remote || defaultName;
 		var property = argv._[0];
 		var value = argv._[1];
