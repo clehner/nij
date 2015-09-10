@@ -296,58 +296,58 @@ function editFiles(dataByPath, namesByPath, cb, infos) {
 
 /* Validation */
 
-function checkService(srv, i) {
+function checkService(warn, srv, i) {
 	if (!srv.name)
-		console.log("Service", i, "missing name");
+		warn("Service", i, "missing name");
 	var uris = srv.uris;
 	if (uris) {
 		if (srv.uri)
-			console.log("Service", i, "has both uri and uris");
+			warn("Service", i, "has both uri and uris");
 		if (typeof uris != "object")
-			console.log("Service", i, "has invalid uris");
+			warn("Service", i, "has invalid uris");
 	} else if (!srv.uri)
-		console.log("Service", i, "missing uri/uris");
+		warn("Service", i, "missing uri/uris");
 }
 
-function checkInfo(info) {
+function checkInfo(warn, info) {
 	/* TODO: use a JSON schema validator */
 	if (!info.key)
-		console.log("Missing key");
+		warn("Missing key");
 	else if (!/[0-9a-z]{52}\.k/.test(info.key))
-		console.log("Invalid key");
+		warn("Invalid key");
 
 	if (!info.hostname)
-		console.log("Missing hostname");
+		warn("Missing hostname");
 
 	if (!info.ip)
-		console.log("Missing ip");
+		warn("Missing ip");
 	else if (!/^fc[0-9a-f:]*$/.test(info.ip))
-		console.log("Invalid ip");
+		warn("Invalid ip");
 
 	var contact = info.contact;
 	if (!contact)
-		console.log("Missing contact");
+		warn("Missing contact");
 	else {
 		if (typeof contact == "object" && !contact.name && !contact.email)
-			console.log("Missing contact name/email");
+			warn("Missing contact name/email");
 	}
 
 	var pgp = contact && contact.pgp || info.pgp;
 	if (!pgp)
-		console.log("Missing pgp");
+		warn("Missing pgp");
 	else {
 		if (!pgp.fingerprint)
-			console.log("Missing pgp fingerprint");
+			warn("Missing pgp fingerprint");
 		if (!pgp.keyserver && !pgp.full)
-			console.log("Missing pgp keyserver/url");
+			warn("Missing pgp keyserver/url");
 	}
 
 	var services = services;
 	if (services) {
 		if (typeof services != "object")
-			console.log("Invalid services");
+			warn("Invalid services");
 		else if (services[0])
-			services.forEach(checkService);
+			services.forEach(checkService.bind(this, warn));
 	}
 }
 
@@ -517,9 +517,24 @@ var commands = {
 			return argv.help ? 0 : 1;
 		}
 
-		filterRemotes(argv._).forEach(function (name) {
-			getInfo(name, checkInfo);
+		var names = filterRemotes(argv._);
+		var waiting = names.length;
+		var warnings = 0;
+
+		names.forEach(function (name) {
+			getInfo(name, function (info) {
+				checkInfo(function (msg) {
+					warnings++;
+					console.log(name + ": " + msg);
+				}, info);
+				if (!--waiting)
+					done();
+			});
 		});
+		function done() {
+			if (warnings)
+				process.exit(1);
+		}
 	},
 
 	init: function (argv) {
@@ -640,13 +655,17 @@ var commands = {
 
 		function next() {
 			editFiles(dataByPath, namesByPath, function (err, infos) {
-				if (err)
-					console.error(err);
-				else
-					for (var path in infos) {
-						saveInfo(namesByPath[path], infos[path]);
-					}
 				Object.keys(dataByPath).forEach(fs.unlink);
+				if (err)
+					return console.error(err);
+				for (var path in infos) {
+					var info = infos[path];
+					var name = namesByPath[path];
+					checkInfo(function (msg) {
+						console.log(name + ": " + msg);
+					}, info);
+					saveInfo(name, info);
+				}
 			});
 		}
 	}
