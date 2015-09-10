@@ -2,7 +2,7 @@
   "name": "nij",
   "version": "1.0.0",
   "description": "nodeinfo.json editor/manager",
-  "bin": "./bin.js",
+  "bin": "./nij.js",
   "man": "./nij.1",
   "repository": {
     "type": "git",
