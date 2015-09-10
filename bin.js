@@ -412,8 +412,15 @@ var commands = {
 			process.exit(argv.help ? 0 : 1);
 		}
 
+		/* List default item */
+		var info = conf.infos[defaultName];
+		if (info) {
+			console.log(defaultName + "\t" + info.path);
+			delete conf.infos[defaultName];
+		}
+		/* List other items */
 		for (var name in conf.infos) {
-			var info = conf.infos[name];
+			info = conf.infos[name];
 			console.log(name + "\t" + info.path);
 		}
 	},
