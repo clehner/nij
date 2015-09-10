@@ -432,6 +432,7 @@ function usage() {
 		"    ls",
 		"    add <name> <path>",
 		"    rm <name>...",
+		"    rename <old> <new>",
 		"    check [<name>...]",
 		"Commands for editing:",
 		"    init [<name>]",
@@ -484,6 +485,29 @@ var commands = {
 		filterRemotes(names).forEach(function (name) {
 			delete conf.infos[name];
 		});
+		writeConfSync();
+	},
+
+	rename: function (argv) {
+		var from = argv._.shift();
+		var to = argv._.shift();
+		if (argv._.length || argv.help) {
+			console.log("Usage:", binName, "rename <old> <new>");
+			process.exit(argv.help ? 0 : 1);
+		}
+
+		if (!conf.infos[from]) {
+			console.error("Remote", from, "doesn't exist");
+			process.exit(1);
+		}
+
+		if (conf.infos[to]) {
+			console.error("Remote", to, "already exists");
+			process.exit(1);
+		}
+
+		conf.infos[to] = conf.infos[from];
+		delete conf.infos[from];
 		writeConfSync();
 	},
 

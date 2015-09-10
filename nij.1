@@ -18,6 +18,7 @@
 .Nm nij ls
 .Nm nij Ic add Ar name Ar path
 .Nm nij Ic rm Ar name ...
+.Nm nij Ic rename Ar old Ar new
 .Nm nij Ic check Op Ar name ...
 .Nm nij Ic init Op Ar name
 .Nm nij Ic touch Op Ar name ...
@@ -38,6 +39,8 @@ may be a pathname or a URL of the form
 scp://host/path
 .It Ic rm Ar name ...
 Remove the given nodeinfo.json files from the remotes list.
+.It Ic rename Ar old Ar new
+Rename a remote.
 .It Ic check Op Ar name ...
 Validate the given nodeinfo.json files. If no arguments are given, validate
 all the files in the remotes list.
@@ -79,6 +82,12 @@ Interactively set up the nodeinfo.json file for remote
 Edit the nodeinfo.json file using
 .Ev EDITOR :
 .Dl nij edit foo
+.Pp
+Rename the remote:
+.Dl nij rename foo bar
+.Pp
+Remove the remote:
+.Dl nij rm bar
 .Sh AUTHOR
 .Nm
 was written by
