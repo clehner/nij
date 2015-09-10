@@ -186,12 +186,25 @@ function initInfo(cb) {
 
 		childProc.execFile("/sbin/ifconfig", ["tun0"], asciiEnc,
 			function (err, stdout) {
-				if (!err) {
-					var m = /addr: (fc[0-9a-f:]*)/.exec(stdout);
-					if (m)
-						info.ip = m[1];
-				}
-				resolve();
+				if (err)
+					return resolve();
+				var m = /addr: (fc[0-9a-f:]*)/.exec(stdout);
+				if (!m)
+					return resolve();
+				info.ip = m[1];
+
+				var cexec = "/opt/cjdns/tools/cexec";
+				if (!fs.existsSync(cexec))
+					return resolve();
+				childProc.execFile(cexec, [
+					'NodeStore_nodeForAddr("' + info.ip + '")'
+				], asciiEnc, function (err, stdout) {
+					if (!err) try {
+						var data = JSON.parse(stdout);
+						info.key = data.result.key;
+					} catch(e) {}
+					return resolve();
+				});
 			}
 		)
 	].length;
@@ -345,6 +358,7 @@ function promptSyncDefault(prompt, value) {
 function initInteractive(info) {
 	info.hostname = promptSyncDefault("Hostname", info.hostname);
 	info.ip = promptSyncDefault("cjdns IP", info.ip);
+	info.key = promptSyncDefault("cjdns public key", info.key);
 
 	var contact = info.contact || {};
 	if ([
