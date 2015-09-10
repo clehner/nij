@@ -6,6 +6,7 @@ var urlParse = require("url").parse;
 var childProc = require("child_process");
 var promptSync = require("sync-prompt").prompt;
 var mktemp = require("mktemp");
+var minimatch = require("minimatch");
 
 var asciiEnc = {encoding: "ascii"};
 
@@ -13,7 +14,6 @@ var confDir = process.env.XDG_CONFIG_HOME || (process.env.HOME + "/.config");
 var confFile = confDir + "/nij.json";
 var conf;
 var binName = pkg.name;
-var defaultName = "default";
 var defaultEditor = "vi";
 
 /* read/write config fns */
@@ -30,6 +30,12 @@ function writeConfSync() {
 	if (!fs.existsSync(confDir))
 		fs.mkdirSync(confDir);
 	fs.writeFileSync(confFile, JSON.stringify(conf, null, 3));
+}
+
+function filterRemotes(names) {
+	var all = Object.keys(conf.infos);
+	return !names.length ? all :
+		minimatch.match(all, "+(" + names.join("|") + ")");
 }
 
 /* read/write info fns */
@@ -106,13 +112,10 @@ function saveInfo(name, info, confirm) {
 function getInfo(name, cb) {
 	var item = conf.infos[name];
 	if (!item) {
-		if (name == defaultName) {
-			console.error("No info. Run '" + binName + " init'");
-		} else {
-			console.error("No info for '" + name + "'");
-		}
+		console.error("No info. Run '" + binName + " init'");
 		process.exit(1);
 	}
+
 	readFile(item.path, function (err, data) {
 		if (!data)
 			return cb(null);
@@ -245,38 +248,49 @@ function getKey(ip, cb) {
 
 /* Editing */
 
-function editFile(path, data, cb) {
-	childProc.spawn(process.env.EDITOR || defaultEditor, [path], {
+function editFiles(dataByPath, namesByPath, cb, infos) {
+	var paths = Object.keys(dataByPath);
+	childProc.spawn(process.env.EDITOR || defaultEditor, paths, {
 		stdio: [0, 1, 2]
 	}).on("close", onEditorClose);
 
 	function onEditorClose(status) {
-		if (status) {
-			console.error("Editor exited uncleanly.");
-			fs.unlink(path);
-			return;
+		if (status)
+			return cb("Editor exited uncleanly.");
+
+		/* List files with invalid JSON */
+		var invalids = {};
+		var invalidNames = [];
+		if (!infos) infos = {};
+
+		for (var path in dataByPath) {
+			var oldData = dataByPath[path];
+			var newData = fs.readFileSync(path, asciiEnc);
+			if (newData == oldData) {
+				/* Data is unchanged. */
+				continue;
+			}
+
+			var info;
+			if (newData) try {
+				info = JSON.parse(newData);
+				infos[path] = info;
+			} catch(e) {
+				invalids[path] = oldData;
+				invalidNames.push(namesByPath[path]);
+			}
 		}
 
-		var newData = fs.readFileSync(path, asciiEnc);
-		if (newData == data) {
-			/* Data is unchanged. */
-			fs.unlink(path);
-			return;
-		}
-
-		var info;
-		if (newData) try {
-			info = JSON.parse(newData);
-		} catch(e) {
-			console.error("Data is not valid JSON.");
-			if (promptYesNoSync("Re-edit?"))
-				return editFile(path, data, cb);
+		if (invalidNames.length) {
+			if (invalidNames.length == 1)
+				console.error("Data is not valid JSON.");
 			else
-				return fs.unlink(path);
+				console.error("Invalid JSON in:", invalidNames.join(", "));
+			if (promptYesNoSync("Re-edit?"))
+				editFiles(invalids, namesByPath, cb, infos);
+		} else {
+			cb(null, infos);
 		}
-
-		fs.unlink(path);
-		cb(info);
 	}
 }
 
@@ -411,29 +425,20 @@ function findNodeInfoFile() {
 
 /* Commands */
 
-function checkArg1(name, argv) {
-	if (argv._.length || argv.help) {
-		console.log("Usage:", binName, name, "[-r <remote>]");
-		process.exit(argv.help ? 0 : 1);
-	}
-}
-
 function usage() {
 	console.log([
-		"Usage:" + binName + " <command> [<arguments>]",
+		"Usage: " + binName + " <command> [<arguments>]",
 		"Commands for managing:",
 		"    ls",
-		"    init",
-		"    add <path>",
-		"    rm",
-		"    check",
+		"    add <name> <path>",
+		"    rm <name>...",
+		"    check [<name>...]",
 		"Commands for editing:",
-		"    touch",
-		"    get [<property>]",
-		"    set [<property> [<value>]]",
-		"    edit [<property>]",
-		"Options:",
-		"    -r <name>       remote name",
+		"    init [<name>]",
+		"    touch [<name>...]",
+		"    cat [<name>...]",
+		"    put <name>",
+		"    edit [<name>...]",
 	].join("\n"));
 }
 
@@ -444,24 +449,17 @@ var commands = {
 			process.exit(argv.help ? 0 : 1);
 		}
 
-		/* List default item */
-		var info = conf.infos[defaultName];
-		if (info) {
-			console.log(defaultName + "\t" + info.path);
-			delete conf.infos[defaultName];
-		}
-		/* List other items */
 		for (var name in conf.infos) {
-			info = conf.infos[name];
+			var info = conf.infos[name];
 			console.log(name + "\t" + info.path);
 		}
 	},
 
 	add: function (argv) {
-		var name = argv.remote || defaultName;
-		var path = argv._[0];
-		if (!path || argv.help) {
-			console.log("Usage: ", binName, "add [-r <remote>] <path>");
+		var name = argv._.shift();
+		var path = argv._.shift();
+		if (!name || !path || argv._.length || argv.help) {
+			console.log("Usage:", binName, "add <name> <path>");
 			process.exit(argv.help ? 0 : 1);
 		}
 
@@ -477,27 +475,42 @@ var commands = {
 	},
 
 	rm: function (argv) {
-		checkArg1("rm", argv);
-
-		var name = argv.remote || defaultName;
-		if (!(name in conf.infos)) {
-			console.log("'" + name + "' not in config");
-			return;
+		var names = argv._;
+		if (!names.length || argv.help) {
+			console.log("Usage:", binName, "rm <name>...");
+			process.exit(argv.help ? 0 : 1);
 		}
-		delete conf.infos[name];
+
+		filterRemotes(names).forEach(function (name) {
+			delete conf.infos[name];
+		});
 		writeConfSync();
 	},
 
 	check: function (argv) {
-		checkArg1("check", argv);
-		var name = argv.remote || defaultName;
-		getInfo(name, checkInfo);
+		if (argv.help) {
+			console.log("Usage:", binName, "check [<name>]...");
+			process.exit(argv.help ? 0 : 1);
+		}
+
+		filterRemotes(argv._).forEach(function (name) {
+			getInfo(name, checkInfo);
+		});
 	},
 
 	init: function (argv) {
-		checkArg1("init", argv);
+		var name = argv._.shift();
+		if (argv._.length || argv.help) {
+			console.log("Usage:", binName, "init [<name>]");
+			process.exit(argv.help ? 0 : 1);
+		}
 
-		var name = argv.remote || defaultName;
+		if (!name) try {
+			name = promptSyncDefault("Node name (for nij use)", "local");
+		} catch(e) {
+			handleEOF(e);
+		}
+
 		var item = conf.infos[name];
 		var oldPath = item ? item.path : findNodeInfoFile();
 		var path;
@@ -527,90 +540,91 @@ var commands = {
 	},
 
 	touch: function (argv) {
-		checkArg1("touch", argv);
-		var name = argv.remote || defaultName;
-		getInfo(name, saveInfo.bind(this, name));
-	},
-
-	get: function (argv) {
-		if (argv._.length > 1 || argv.help) {
-			console.log("Usage:", binName, "get [-r <remote>] [<property>]");
-			process.exit(argv.help ? 0 : 1);
+		if (argv.help) {
+			console.log("Usage:", binName, "touch [<name>]...");
+			return;
 		}
 
-		var name = argv.remote || defaultName;
-		var property = argv._[0];
-
-		getInfo(name, function (info) {
-			var obj = (property == null) ? info : info[property];
-			var data = JSON.stringify(obj, null, 3);
-			console.log(data);
+		filterRemotes(argv._).forEach(function (name) {
+			getInfo(name, saveInfo.bind(this, name));
 		});
 	},
 
-	edit: function (argv) {
-		if (argv._.length > 1 || argv.help) {
-			console.log("Usage:", binName, "edit [-r <remote>] [<property>]");
-			process.exit(argv.help ? 0 : 1);
+	cat: function (argv) {
+		if (argv.help) {
+			console.log("Usage:", binName, "cat [<name>...]");
+			return;
 		}
 
-		var name = argv.remote || defaultName;
-		var property = argv._[0];
-
-		getInfo(name, function (info) {
-			var name2 = name.replace(/\//g, "-");
-			var template = "/tmp/nodeinfo-" + name2 + "-XXXXXXX.json";
-			var path = mktemp.createFileSync(template);
-			var obj;
-			if (property == null) {
-				obj = info;
-				if (obj.last_modified)
-					obj.last_modified += " (auto-updated)";
-			} else {
-				obj = info[property];
-			}
-			var data = (obj == null) ? "" : JSON.stringify(obj, null, 3);
-			fs.writeFileSync(path, data);
-
-			editFile(path, data, function (obj) {
-				if (property == null)
-					info = obj;
-				else
-					info[property] = obj;
-				saveInfo(name, info);
+		filterRemotes(argv._).forEach(function (name) {
+			getInfo(name, function (info) {
+				var data = JSON.stringify(info, null, 3);
+				console.log(data);
 			});
 		});
 	},
 
-	set: function (argv) {
-		if (argv._.length > 2 || argv.help) {
-			console.log("Usage:", binName,
-				"set [-r <remote>] [<property> [<value>]]");
+	put: function (argv) {
+		var name = argv._.shift();
+		if (argv._.length || argv.help) {
+			console.log("Usage:", binName, "put <name>");
 			process.exit(argv.help ? 0 : 1);
 		}
 
-		var name = argv.remote || defaultName;
-		var property = argv._[0];
-		var value = argv._[1];
+		var data = fs.readFileSync("/dev/stdin");
+		var info;
+		try {
+			info = JSON.parse(data);
+		} catch(e) {
+			console.log("Data is not valid JSON.");
+			process.exit(1);
+		}
+		saveInfo(name, info);
+	},
 
-		if (property == null && value == null) {
-			var info = JSON.parse(fs.readFileSync("/dev/stdin"));
-			saveInfo(name, info);
+	edit: function (argv) {
+		if (argv.help) {
+			console.log("Usage:", binName, "edit [<name>...]");
 			return;
 		}
 
-		getInfo(name, function (info) {
-			var obj;
-			if (value == null) {
-				obj = JSON.parse(fs.readFileSync("/dev/stdin"));
-			} else try {
-				obj = JSON.parse(value);
-			} catch(e) {
-				obj = value;
-			}
-			info[property] = obj;
-			saveInfo(name, info);
+		var names = filterRemotes(argv._);
+		var waiting = names.length;
+		/* store original data for comparison after editing */
+		var namesByPath = {};
+		var dataByPath = {};
+
+		names.forEach(function (name) {
+			getInfo(name, function (info) {
+				var name2 = name.replace(/\//g, "-");
+				var template = "/tmp/nodeinfo-" + name2 + "-XXXXXXX.json";
+				var path = mktemp.createFileSync(template);
+				namesByPath[path] = name;
+				var data;
+				if (info == null) {
+					data = "";
+				} else {
+					if (info.last_modified)
+						info.last_modified += " (auto-updated)";
+					data = JSON.stringify(info, null, 3);
+					fs.writeFileSync(path, data);
+				}
+				dataByPath[path] = data;
+				if (!--waiting) next();
+			});
 		});
+
+		function next() {
+			editFiles(dataByPath, namesByPath, function (err, infos) {
+				if (err)
+					console.error(err);
+				else
+					for (var path in infos) {
+						saveInfo(namesByPath[path], infos[path]);
+					}
+				Object.keys(dataByPath).forEach(fs.unlink);
+			});
+		}
 	}
 };
 

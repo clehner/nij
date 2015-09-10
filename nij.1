@@ -16,65 +16,44 @@
 .Nd Manage and edit nodeinfo.json files
 .Sh SYNOPSIS
 .Nm nij ls
-.Nm nij Op Fl r Ar name
-.Ic add Ar path
-.Nm nij Op Fl r Ar name
-.Ic rm
-.Nm nij Op Fl r Ar name
-.Ic check
-.Nm nij Op Fl r Ar name
-.Ic init
-.Nm nij Op Fl r Ar name
-.Ic touch
-.Nm nij Op Fl r Ar name
-.Ic get Op Ar property
-.Nm nij Op Fl r Ar name
-.Ic set Op Ar property Op Ar value
-.Nm nij Op Fl r Ar name
-.Ic edit Op Ar property
+.Nm nij Ic add Ar name Ar path
+.Nm nij Ic rm Ar name ...
+.Nm nij Ic check Op Ar name ...
+.Nm nij Ic init Op Ar name
+.Nm nij Ic touch Op Ar name ...
+.Nm nij Ic cat Op Ar name ...
+.Nm nij Ic put Ar name
+.Nm nij Ic edit Op Ar name ...
 .Sh DESCRIPTION
 .Nm
 is a command-line program for managing nodeinfo.json files.
-.Sh OPTIONS
-.Bl -tag -width Ds
-.It Fl r Ar name
-Name which nodeinfo.json file to use
-.It Fl h
-Get help with a command
-.El
 .Sh COMMANDS
 .Bl -tag -width Ds
 .It Ic ls
 List remotes, which are mappings of names to path names of nodeinfo.json files.
-.It Ic add Ar path
+.It Ic add Ar name Ar path
 Add a nodeinfo.json file to the remotes list.
 .Ar path
 may be a pathname or a URL of the form
 scp://host/path
-.It Ic rm
-Remove a nodeinfo.json file from the remotes list.
-.It Ic check
-Validate the nodeinfo.json file.
-.It Ic init
-Interactively create or update nodeinfo.json data
-.It Ic touch
-Update the modification data in the node info.
-.It Ic get Op Ar property
-Get the value of a JSON property of the nodeinfo.json file. If
-.Ar property
-is omitted, get the contents of the whole file.
-.It Ic set Op Ar property Op Ar value
-Set a property of the nodeinfo.json file to
-.Ar value .
-If
-.Ar property
-is omitted, the entire contents of the file are replaced. If
-.Ar value
-is omitted, the value to use is read from stdin.
-.It Ic edit Op Ar property
-Edit the nodeinfo.json file using your
+.It Ic rm Ar name ...
+Remove the given nodeinfo.json files from the remotes list.
+.It Ic check Op Ar name ...
+Validate the given nodeinfo.json files. If no arguments are given, validate
+all the files in the remotes list.
+.It Ic init Op Ar name
+Interactively create or update a nodeinfo.json file. If the file does not yet
+exist, some values will be populated with guessed data.
+.It Ic touch Op Ar name ...
+Update the last modified date of the given nodeinfo.json files.
+.It Ic cat Op Ar name ...
+Get the contents of the given nodeinfo.json files.
+.It Ic put Ar name
+Write stdin to the given nodeinfo.json file, if it is valid JSON.
+.It Ic edit Op Ar name ...
+Edit the given nodeinfo.json files using your
 .Ev EDITOR or
-.Xr vi 1 . After editing, if the file is not valid JSON, the user is prompted
+.Xr vi 1 . After editing, if a file is not valid JSON, the user is prompted
 to re-edit it. Before saving, the last_modified property is set to the current
 time.
 .El
@@ -91,19 +70,15 @@ and
 .El
 .Sh EXAMPLES
 Add a remote:
-.Dl nij add -r foo scp://me@example.org//var/www/nodeinfo.json
+.Dl nij add foo scp://me@example.org//var/www/nodeinfo.json
 .Pp
 Interactively set up the nodeinfo.json file for remote
 .Ar foo :
-.Dl nij init -r foo
+.Dl nij init foo
 .Pp
 Edit the nodeinfo.json file using
 .Ev EDITOR :
-.Dl nij edit -r foo
-.Pp
-Set the hostname for
-.Ar foo :
-.Dl nij -r foo set hostname foo.example.org
+.Dl nij edit foo
 .Sh AUTHOR
 .Nm
 was written by
