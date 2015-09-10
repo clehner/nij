@@ -44,7 +44,8 @@ function readFileScp(host, path, cb) {
 }
 
 function writeFileScp(host, path, data, cb) {
-	var child = childProc("ssh", ["-qT", host, "cat > " + path]);
+	var child = childProc.execFile("/usr/bin/ssh",
+		["-qT", host, "cat > " + path]);
 	child.stdin.end(data);
 	child.on("close", function (status) {
 		cb(status ? new Error("Error writing file: " + status) : null);
@@ -79,10 +80,20 @@ function writeFile(url, data, cb) {
 
 /* Higher-level read/write fns */
 
-function saveInfo(name, info) {
+function saveInfo(name, info, confirm) {
 	var item = conf.infos[name];
 	info.last_modified = new Date().toISOString();
 	var data = JSON.stringify(info, null, 3);
+
+	if (confirm) try {
+		console.log("About to write to " + item.path + ":");
+		console.log(data);
+		if (!promptYesNoSync("Is this ok?"))
+			console.log("Cancelling");
+	} catch(e) {
+		handleEOF(e);
+	}
+
 	writeFile(item.path, data, function (err) {
 		if (err) {
 			console.error("Error writing info");
@@ -351,7 +362,7 @@ function initInteractive(info) {
 		pgp.fingerprint =
 			promptSyncDefault("PGP key fingerprint", pgp.fingerprint),
 		pgp.keyserver =
-			promptSyncDefault("PGP keyserver", pgp.keyserver || pgp.full)
+			promptSyncDefault("PGP keyserver", pgp.keyserver)
 	].some(Boolean) && !contact.pgp)
 		info.pgp = pgp;
 }
@@ -434,17 +445,8 @@ var commands = {
 		});
 
 		function next(info) {
-			try {
-				initInteractive(info);
-				console.log("About to write to " + path + ":");
-				console.log(info);
-				if (!promptYesNoSync("Is this ok?"))
-					console.log("Cancelling");
-				else
-					saveInfo(name, info);
-			} catch(e) {
-				handleEOF(e);
-			}
+			initInteractive(info);
+			saveInfo(name, info, true);
 		}
 	},
 
@@ -452,7 +454,7 @@ var commands = {
 		var name = argv.remote || defaultName;
 		var path = argv._[0];
 		if (!path || argv.help) {
-			console.log("Usage:", binName, "add [-r <remote>] <path>");
+			console.log("Usage: ", binName, "add [-r <remote>] <path>");
 			process.exit(argv.help ? 0 : 1);
 		}
 
@@ -520,7 +522,14 @@ var commands = {
 			var name2 = name.replace(/\//g, "-");
 			var template = "/tmp/nodeinfo-" + name2 + "-XXXXXXX.json";
 			var path = mktemp.createFileSync(template);
-			var obj = (property == null) ? info : info[property];
+			var obj;
+			if (property == null) {
+				obj = info;
+				if (obj.last_modified)
+					obj.last_modified += " (auto-updated)";
+			} else {
+				obj = info[property];
+			}
 			var data = (obj == null) ? "" : JSON.stringify(obj, null, 3);
 			fs.writeFileSync(path, data);
 
