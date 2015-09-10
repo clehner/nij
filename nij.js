@@ -487,7 +487,13 @@ var commands = {
 			return argv.help ? 0 : 1;
 		}
 
-		filterRemotes(names).forEach(function (name) {
+		var remotes = filterRemotes(names);
+		if (!remotes.length) {
+			console.error("No remote", names.join(", "));
+			return 1;
+		}
+
+		remotes.forEach(function (name) {
 			delete conf.infos[name];
 		});
 		writeConfSync();
