@@ -3,10 +3,11 @@ var minimist = require("minimist");
 var pkg = require("./package");
 var fs = require("fs");
 var urlParse = require("url").parse;
-var spawn = require("child_process").spawn;
-var execFile = require("child_process").execFile;
+var childProc = require("child_process");
 var promptSync = require("sync-prompt").prompt;
 var mktemp = require("mktemp");
+
+var asciiEnc = {encoding: "ascii"};
 
 var confDir = process.env.XDG_CONFIG_HOME || (process.env.HOME + "/.config");
 var confFile = confDir + "/nij.json";
@@ -34,9 +35,8 @@ function writeConfSync() {
 /* read/write info fns */
 
 function readFileScp(host, path, cb) {
-	execFile("/usr/bin/ssh", ["-qT", host, "cat " + path], {
-		encoding: "ascii"
-	}, function (err, stdout, stderr) {
+	childProc.execFile("/usr/bin/ssh", ["-qT", host, "cat " + path],
+			asciiEnc, function (err, stdout, stderr) {
 		if (stderr.length)
 			console.error(stderr);
 		cb(err, stdout);
@@ -44,7 +44,7 @@ function readFileScp(host, path, cb) {
 }
 
 function writeFileScp(host, path, data, cb) {
-	var child = spawn("ssh", ["-qT", host, "cat > " + path]);
+	var child = childProc("ssh", ["-qT", host, "cat > " + path]);
 	child.stdin.end(data);
 	child.on("close", function (status) {
 		cb(status ? new Error("Error writing file: " + status) : null);
@@ -58,7 +58,7 @@ function readFile(url, cb) {
 			var host = (parts.auth ? parts.auth + "@" : "") + parts.host;
 			return readFileScp(host, parts.path.substr(1), cb);
 		case null:
-			return fs.readFile(parts.path, {encoding: "ascii"}, cb);
+			return fs.readFile(parts.path, asciiEnc, cb);
 		default:
 			throw new Error("Unknown protocol " + parts.protocol);
 	}
@@ -114,10 +114,97 @@ function getInfo(name, cb) {
 	});
 }
 
+/* Initing */
+
+function initInfo(cb) {
+	/* populate initial nodeinfo.json data */
+	var user = process.env.USER;
+	var info = {};
+	var contact = {};
+	var pgp = {};
+
+	var waiting = [
+		childProc.execFile("/usr/bin/awk", [
+			"-F:",
+			'$1 == "' + user + '" { sub(/,.*/, "", $5); print $5 }',
+			"/etc/passwd"
+		], asciiEnc, function (err, stdout) {
+			if (!err && stdout)
+				contact.name = stdout.trim();
+			resolve();
+		}),
+
+		childProc.exec("git config user.email", asciiEnc,
+			function (err, stdout) {
+				if (!err)
+					contact.email = stdout.trim();
+				resolve();
+			}
+		),
+
+		childProc.execFile("/bin/hostname", asciiEnc, function (err, stdout) {
+			if (!err)
+				info.hostname = stdout.trim();
+			resolve();
+		}),
+
+		childProc.exec("gpgconf --list-options gpg", asciiEnc,
+			function (err, stdout) {
+				if (err)
+					return resolve();
+				var m = /^keyserver:0:.*?"(.*)$/m.exec(stdout);
+				if (m) {
+					pgp.keyserver = decodeURIComponent(m[1]);
+				}
+				m = /^default-key:.*?"([0-9a-fA-F]+)$/m.exec(stdout);
+				if (!m)
+					return resolve();
+				var key = m[1];
+				childProc.execFile("/usr/bin/gpg", ["--fingerprint", key],
+					asciiEnc, function (err, stdout) {
+						m = /Key fingerprint = ([0-9A-F ]+)$/m.exec(stdout);
+						if (m) {
+							key = m[1].replace(/ /g, "");
+						}
+						pgp.key = key;
+						resolve();
+					}
+				);
+			}
+		),
+
+		childProc.execFile("/sbin/ifconfig", ["tun0"], asciiEnc,
+			function (err, stdout) {
+				if (!err) {
+					var m = /addr: (fc[0-9a-f:]*)/.exec(stdout);
+					if (m)
+						info.ip = m[1];
+				}
+				resolve();
+			}
+		)
+	].length;
+
+	/* TODO: connect to admin socket to get node public key */
+
+	function resolve() {
+		if (--waiting)
+			return;
+
+		if (contact.name || contact.email)
+			info.contact = contact;
+
+		if (pgp.keyserver || pgp.key)
+			info.pgp = pgp;
+
+		cb(info);
+	}
+}
+
 /* Editing */
 
 function editFile(path, data, cb) {
-	spawn(process.env.EDITOR || defaultEditor, [path], {
+	childProc.spawn(process.env.EDITOR || defaultEditor, [path], {
 		stdio: [0, 1, 2]
 	}).on("close", onEditorClose);
 
@@ -243,10 +330,15 @@ var commands = {
 
 	init: function (argv) {
 		var name = argv.remote || defaultName;
-		var info = conf.infos[name] || {
-		};
-		/* TODO */
-		conf.infos[name] = info;
+		if (conf.infos[name])
+			getInfo(name, next);
+		else
+			initInfo(next);
+
+		function next(info) {
+			conf.infos[name] = info;
+			console.log(JSON.stringify(info, null, 3));
+		}
 	},
 
 	add: function (argv) {
