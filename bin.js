@@ -131,6 +131,7 @@ function editFile(path, data, cb) {
 		var newData = fs.readFileSync(path);
 		if (newData == data) {
 			/* Data is unchanged. */
+			fs.unlink(path);
 			return;
 		}
 
@@ -145,9 +146,11 @@ function editFile(path, data, cb) {
 				if (/^y/i.test(resp))
 					return editFile(path, data, cb);
 			} while (!/^n/.test(resp));
+			fs.unlink(path);
 			return;
 		}
 
+		fs.unlink(path);
 		cb(info);
 	}
 }
