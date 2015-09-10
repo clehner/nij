@@ -33,10 +33,14 @@ function writeConfSync() {
 
 /* read/write info fns */
 
-function readFileScp(url, cb) {
-	execFile("/usr/bin/scp", ["-q", url, "/dev/stdout"], {
+function readFileScp(host, path, cb) {
+	execFile("/usr/bin/ssh", ["-qT", host, "cat " + path], {
 		encoding: "ascii"
-	}, cb);
+	}, function (err, stdout, stderr) {
+		if (stderr.length)
+			console.error(stderr);
+		cb(err, stdout);
+	});
 }
 
 function writeFileScp(host, path, data, cb) {
@@ -52,7 +56,7 @@ function readFile(url, cb) {
 	switch (parts.protocol) {
 		case "scp:":
 			var host = (parts.auth ? parts.auth + "@" : "") + parts.host;
-			return readFileScp(host + ":" + parts.path, cb);
+			return readFileScp(host, parts.path.substr(1), cb);
 		case null:
 			return fs.readFile(parts.path, {encoding: "ascii"}, cb);
 		default:
@@ -65,7 +69,7 @@ function writeFile(url, data, cb) {
 	switch (parts.protocol) {
 		case "scp:":
 			var host = (parts.auth ? parts.auth + "@" : "") + parts.host;
-			return writeFileScp(host, parts.path, data, cb);
+			return writeFileScp(host, parts.path.substr(1), data, cb);
 		case null:
 			return fs.writeFile(parts.path, data, cb);
 		default:
@@ -99,6 +103,8 @@ function getInfo(name, cb) {
 		process.exit(1);
 	}
 	readFile(item.path, function (err, data) {
+		if (!data)
+			return cb(null);
 		var info = JSON.parse(data);
 		if (err) {
 			console.error("Error reading info");
@@ -212,7 +218,7 @@ function usage() {
 		"    ls",
 		"    init",
 		"    add <path>",
-		"    remove",
+		"    rm",
 		"    check",
 		"Commands for editing:",
 		"    touch",
@@ -256,11 +262,10 @@ var commands = {
 		conf.infos[name] = {
 			path: path
 		};
-		console.log("Remote added");
 		writeConfSync();
 	},
 
-	remove: function (argv) {
+	rm: function (argv) {
 		var name = argv.remote || defaultName;
 		if (!(name in conf.infos)) {
 			console.log("'" + name + "' not in config");
