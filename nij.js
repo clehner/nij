@@ -118,9 +118,11 @@ function getInfo(name, cb) {
 
 	readFile(item.path, function (err, data) {
 		if (err) {
-			if (err.signal == "SIGINT") {
+			if (err.code == "SIGINT") {
 				console.error("Interrupted");
 				process.exit(1);
+			} else if (err.code == "ENOENT") {
+				return cb(null);
 			} else {
 				console.error("Error reading info");
 				throw err;
