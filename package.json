@@ -1,6 +1,6 @@
 {
   "name": "nij",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "nodeinfo.json editor/manager",
   "bin": "./nij.js",
   "man": "./nij.1",
@@ -18,6 +18,7 @@
     "url": "https://github.com/clehner/nij/issues"
   },
   "dependencies": {
+    "minimatch": "^3.0.0",
     "minimist": "^1.2.0",
     "mktemp": "^0.4.0",
     "sync-prompt": "^0.4.2"
