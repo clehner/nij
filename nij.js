@@ -374,7 +374,7 @@ function checkInfo(warn, info) {
 			warn("Missing municipality");
 		if(!location.uri)
 			warn("Missing meshlocal uri");
-		}
+	}
 
 	var services = info.services;
 	if (services) {
