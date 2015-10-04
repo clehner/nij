@@ -349,7 +349,7 @@ function checkInfo(warn, info) {
 			warn("Missing pgp keyserver/url");
 	}
 
-	var services = services;
+	var services = info.services;
 	if (services) {
 		if (typeof services != "object")
 			warn("Invalid services");
