@@ -16,6 +16,8 @@ var conf;
 var binName = pkg.name;
 var defaultEditor = "vi";
 
+var validContinents=['AS', 'SA', 'NA', 'AF', 'EU', 'AN', 'OC'];
+
 /* read/write config fns */
 
 function readConfSync() {
@@ -349,6 +351,31 @@ function checkInfo(warn, info) {
 			warn("Missing pgp keyserver/url");
 	}
 
+	var location=info.location;
+	if(!location){
+		warn("Missing location");
+	}else{
+		// longitude, latitude, and altitude are unlikely to be used
+		// maybe we don't even want to warn in their cases?
+		if(!location.longitude)
+			warn("Missing longitude");
+		if(!location.latitude)
+			warn("Missing latitude");
+		if(!location.altitude)
+			warn("Missing altitude");
+		if(!location.continent){
+			warn("Missing continent");    
+		}else if(validContinents.indexOf(location.continent.toUpperCase()) == -1){
+			warn("Invalid Continent code");
+		}
+		if(!location.region)
+			warn("Missing region");
+		if(!location.municipality)
+			warn("Missing municipality");
+		if(!location.uri)
+			warn("Missing meshlocal uri");
+		}
+
 	var services = info.services;
 	if (services) {
 		if (typeof services != "object")
@@ -418,6 +445,20 @@ function initInteractive(info) {
 			promptSyncDefault("PGP keyserver", pgp.keyserver)
 	].some(Boolean) && !contact.pgp)
 		info.pgp = pgp;
+
+    var location = info.location || {};
+
+    if([
+        location.longitude = promptSyncDefault("longitude", location.longitude),
+        location.latitude = promptSyncDefault("latitude", location.latitude),
+        location.altitude = promptSyncDefault("altitude", location.altitude),
+        location.continent = promptSyncDefault("continent",(console.log("Valid continent codes include %s",validContinents), location.continent)),
+        location.region = promptSyncDefault("region", location.region),
+        location.municipality = promptSyncDefault("municipality",location.municipality),
+        location.uri = promptSyncDefault("uri", location.uri)
+    ].some(Boolean))
+        info.location=location;
+
 }
 
 

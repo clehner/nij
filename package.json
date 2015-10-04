@@ -1,6 +1,6 @@
 {
   "name": "nij",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "nodeinfo.json editor/manager",
   "bin": "./nij.js",
   "man": "./nij.1",
