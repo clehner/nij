@@ -450,17 +450,25 @@ function initInteractive(info) {
 
 	var loc = info.location || {};
 	if ([
-		loc.longitude = promptSyncDefault("longitude", loc.longitude),
-		loc.latitude = promptSyncDefault("latitude", loc.latitude),
-		loc.altitude = promptSyncDefault("altitude", loc.altitude),
-		loc.continent = promptSyncDefault("continent",
+		loc.longitude = promptSyncDefault("Longitude", loc.longitude),
+		loc.latitude = promptSyncDefault("Latitude", loc.latitude),
+		loc.altitude = promptSyncDefault("Altitude (m)", loc.altitude),
+		loc.continent = promptSyncDefault("Continent",
 			(console.log("Valid continent codes include %s", validContinents),
 				loc.continent)),
-		loc.region = promptSyncDefault("region", loc.region),
-		loc.municipality = promptSyncDefault("municipality", loc.municipality),
-		loc.uri = promptSyncDefault("uri", loc.uri)
+		loc.region = promptSyncDefault("Region", loc.region),
+		loc.municipality = promptSyncDefault("Municipality", loc.municipality),
+		loc.uri = promptSyncDefault("Meshlocal uri", loc.uri)
 	].some(Boolean)) {
 		info.location = loc;
+
+		// Try to coerce values to numbers
+		if (!isNaN(loc.longitude))
+			loc.longitude = +loc.longitude;
+		if (!isNaN(loc.latitude))
+			loc.latitude = +loc.latitude;
+		if (!isNaN(loc.altitude))
+			loc.altitude = +loc.altitude;
 	}
 }
 
