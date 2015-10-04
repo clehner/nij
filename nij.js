@@ -351,28 +351,30 @@ function checkInfo(warn, info) {
 			warn("Missing pgp keyserver/url");
 	}
 
-	var location=info.location;
-	if(!location){
+	var location = info.location;
+	if (!location)
 		warn("Missing location");
-	}else{
+	else {
 		// longitude, latitude, and altitude are unlikely to be used
 		// maybe we don't even want to warn in their cases?
-		if(!location.longitude)
+		if (!location.longitude)
 			warn("Missing longitude");
-		if(!location.latitude)
+		if (!location.latitude)
 			warn("Missing latitude");
-		if(!location.altitude)
+		if (!location.altitude)
 			warn("Missing altitude");
-		if(!location.continent){
-			warn("Missing continent");    
-		}else if(validContinents.indexOf(location.continent.toUpperCase()) == -1){
+
+		var continent = location.continent;
+		if (!continent)
+			warn("Missing continent");
+		else if (validContinents.indexOf(continent.toUpperCase()) == -1)
 			warn("Invalid Continent code");
-		}
-		if(!location.region)
+
+		if (!location.region)
 			warn("Missing region");
-		if(!location.municipality)
+		if (!location.municipality)
 			warn("Missing municipality");
-		if(!location.uri)
+		if (!location.uri)
 			warn("Missing meshlocal uri");
 	}
 
@@ -446,19 +448,20 @@ function initInteractive(info) {
 	].some(Boolean) && !contact.pgp)
 		info.pgp = pgp;
 
-    var location = info.location || {};
-
-    if([
-        location.longitude = promptSyncDefault("longitude", location.longitude),
-        location.latitude = promptSyncDefault("latitude", location.latitude),
-        location.altitude = promptSyncDefault("altitude", location.altitude),
-        location.continent = promptSyncDefault("continent",(console.log("Valid continent codes include %s",validContinents), location.continent)),
-        location.region = promptSyncDefault("region", location.region),
-        location.municipality = promptSyncDefault("municipality",location.municipality),
-        location.uri = promptSyncDefault("uri", location.uri)
-    ].some(Boolean))
-        info.location=location;
-
+	var loc = info.location || {};
+	if ([
+		loc.longitude = promptSyncDefault("longitude", loc.longitude),
+		loc.latitude = promptSyncDefault("latitude", loc.latitude),
+		loc.altitude = promptSyncDefault("altitude", loc.altitude),
+		loc.continent = promptSyncDefault("continent",
+			(console.log("Valid continent codes include %s", validContinents),
+				loc.continent)),
+		loc.region = promptSyncDefault("region", loc.region),
+		loc.municipality = promptSyncDefault("municipality", loc.municipality),
+		loc.uri = promptSyncDefault("uri", loc.uri)
+	].some(Boolean)) {
+		info.location = loc;
+	}
 }
 
 
