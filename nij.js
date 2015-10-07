@@ -320,6 +320,11 @@ function checkService(warn, srv, i) {
 
 function checkInfo(warn, info) {
 	/* TODO: use a JSON schema validator */
+	if (!info) {
+		warn("Info is empty");
+		return;
+	}
+
 	if (!info.key)
 		warn("Missing key");
 	else if (!/[0-9a-z]{52}\.k/.test(info.key))
