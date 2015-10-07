@@ -8,7 +8,7 @@ var promptSync = require("sync-prompt").prompt;
 var mktemp = require("mktemp");
 var minimatch = require("minimatch");
 
-var asciiEnc = {encoding: "ascii"};
+var encoding = {encoding: "utf8"};
 
 var confDir = process.env.XDG_CONFIG_HOME || (process.env.HOME + "/.config");
 var confFile = confDir + "/nij.json";
@@ -22,7 +22,7 @@ var validContinents=['AS', 'SA', 'NA', 'AF', 'EU', 'AN', 'OC'];
 
 function readConfSync() {
 	conf = !fs.existsSync(confFile) ? {} :
-		JSON.parse(fs.readFileSync(confFile));
+		JSON.parse(fs.readFileSync(confFile, encoding));
 	if (!conf.infos)
 		conf.infos = {};
 	return conf;
@@ -31,7 +31,7 @@ function readConfSync() {
 function writeConfSync() {
 	if (!fs.existsSync(confDir))
 		fs.mkdirSync(confDir);
-	fs.writeFileSync(confFile, JSON.stringify(conf, null, 3));
+	fs.writeFileSync(confFile, JSON.stringify(conf, null, 3), encoding);
 }
 
 function filterRemotes(names) {
@@ -44,7 +44,7 @@ function filterRemotes(names) {
 
 function readFileScp(host, path, cb) {
 	childProc.execFile("/usr/bin/ssh", ["-qT", host, "cat " + path],
-			asciiEnc, function (err, stdout, stderr) {
+			encoding, function (err, stdout, stderr) {
 		if (stderr.length)
 			console.error(stderr);
 		cb(err, stdout);
@@ -67,7 +67,7 @@ function readFile(url, cb) {
 			var host = (parts.auth ? parts.auth + "@" : "") + parts.host;
 			return readFileScp(host, parts.path.substr(1), cb);
 		case null:
-			return fs.readFile(parts.path, asciiEnc, cb);
+			return fs.readFile(parts.path, encoding, cb);
 		default:
 			throw new Error("Unknown protocol " + parts.protocol);
 	}
@@ -80,7 +80,7 @@ function writeFile(url, data, cb) {
 			var host = (parts.auth ? parts.auth + "@" : "") + parts.host;
 			return writeFileScp(host, parts.path.substr(1), data, cb);
 		case null:
-			return fs.writeFile(parts.path, data, cb);
+			return fs.writeFile(parts.path, data, encoding, cb);
 		default:
 			throw new Error("Unknown protocol " + parts.protocol);
 	}
@@ -151,13 +151,13 @@ function initInfo(cb) {
 			"-F:",
 			'$1 == "' + user + '" { sub(/,.*/, "", $5); print $5 }',
 			"/etc/passwd"
-		], asciiEnc, function (err, stdout) {
+		], encoding, function (err, stdout) {
 			if (!err && stdout)
 				contact.name = stdout.trim();
 			resolve();
 		}),
 
-		childProc.exec("git config user.email", asciiEnc,
+		childProc.exec("git config user.email", encoding,
 			function (err, stdout) {
 				if (!err)
 					contact.email = stdout.trim();
@@ -165,13 +165,13 @@ function initInfo(cb) {
 			}
 		),
 
-		childProc.execFile("/bin/hostname", asciiEnc, function (err, stdout) {
+		childProc.execFile("/bin/hostname", encoding, function (err, stdout) {
 			if (!err)
 				info.hostname = stdout.trim();
 			resolve();
 		}),
 
-		childProc.exec("gpgconf --list-options gpg", asciiEnc,
+		childProc.exec("gpgconf --list-options gpg", encoding,
 			function (err, stdout) {
 				if (err)
 					return resolve();
@@ -184,7 +184,7 @@ function initInfo(cb) {
 					return resolve();
 				var key = m[1];
 				childProc.execFile("/usr/bin/gpg", ["--fingerprint", key],
-					asciiEnc, function (err, stdout) {
+					encoding, function (err, stdout) {
 						m = /Key fingerprint = ([0-9A-F ]+)$/m.exec(stdout);
 						if (m) {
 							key = m[1].replace(/ /g, "");
@@ -196,7 +196,7 @@ function initInfo(cb) {
 			}
 		),
 
-		childProc.execFile("/sbin/ifconfig", ["tun0"], asciiEnc,
+		childProc.execFile("/sbin/ifconfig", ["tun0"], encoding,
 			function (err, stdout) {
 				if (err)
 					return resolve();
@@ -274,7 +274,7 @@ function editFiles(dataByPath, namesByPath, cb, infos) {
 
 		for (var path in dataByPath) {
 			var oldData = dataByPath[path];
-			var newData = fs.readFileSync(path, asciiEnc);
+			var newData = fs.readFileSync(path, encoding);
 			if (newData == oldData) {
 				/* Data is unchanged. */
 				continue;
@@ -680,7 +680,7 @@ var commands = {
 			return argv.help ? 0 : 1;
 		}
 
-		var data = fs.readFileSync("/dev/stdin");
+		var data = fs.readFileSync("/dev/stdin", encoding);
 		var info;
 		try {
 			info = JSON.parse(data);
@@ -716,7 +716,7 @@ var commands = {
 					if (info.last_modified)
 						info.last_modified += " (auto-updated)";
 					data = JSON.stringify(info, null, 3);
-					fs.writeFileSync(path, data);
+					fs.writeFileSync(path, data, encoding);
 				}
 				dataByPath[path] = data;
 				if (!--waiting) next();
