@@ -725,7 +725,7 @@ var commands = {
 
 		function next() {
 			editFiles(dataByPath, namesByPath, function (err, infos) {
-				Object.keys(dataByPath).forEach(fs.unlink);
+				Object.keys(dataByPath).forEach(fs.unlinkSync);
 				if (err)
 					return console.error(err);
 				for (var path in infos) {
