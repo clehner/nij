@@ -4,7 +4,7 @@ var pkg = require("./package");
 var fs = require("fs");
 var urlParse = require("url").parse;
 var childProc = require("child_process");
-var promptSync = require("sync-prompt").prompt;
+var promptSync = require("readline-sync").prompt;
 var mktemp = require("mktemp");
 var minimatch = require("minimatch");
 
