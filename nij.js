@@ -4,7 +4,7 @@ var pkg = require("./package");
 var fs = require("fs");
 var urlParse = require("url").parse;
 var childProc = require("child_process");
-var promptSync = require("readline-sync").prompt;
+var readlineSync = require("readline-sync");
 var mktemp = require("mktemp");
 var minimatch = require("minimatch");
 
@@ -93,13 +93,11 @@ function saveInfo(name, info, confirm) {
 	info.last_modified = new Date().toISOString();
 	var data = JSON.stringify(info, null, 3);
 
-	if (confirm) try {
+	if (confirm) {
 		console.log("About to write to " + item.path + ":");
 		console.log(data);
 		if (!promptYesNoSync("Is this ok?"))
 			console.log("Cancelling");
-	} catch(e) {
-		handleEOF(e);
 	}
 
 	writeFile(item.path, data, function (err) {
@@ -407,25 +405,18 @@ function handleEOF(e) {
 }
 
 function promptYesNoSync(prompt) {
-	var resp;
-	do {
-		resp = promptSync(prompt + " [Y/n] ");
-		if (promptSync.isEOF())
-			throw new EOFError();
-		if (!resp)
-			return true;
-		if (/^y/i.test(resp))
-			return true;
-	} while (!/^n/.test(resp));
-	return false;
+	do var resp = readlineSync.question(prompt + " [Y/n] ", {
+		trueValue: /^y|^$/i,
+		falseValue: /^n/i
+	}); while (typeof resp != "boolean");
+	return resp;
 }
 
 function promptSyncDefault(prompt, value) {
-	if (promptSync.isEOF())
-		throw new EOFError();
-	return value ?
-		promptSync(prompt + ": [" + value + "] ") || value :
-		promptSync(prompt + ": ") || undefined;
+	var defaultOption = value ? "[" + value + "] " : "";
+	return readlineSync.question(prompt + ": " + defaultOption, {
+		defaultInput: value
+	});
 }
 
 function initInteractive(info) {
