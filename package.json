@@ -1,6 +1,6 @@
 {
   "name": "nij",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "nodeinfo.json editor/manager",
   "bin": "./nij.js",
   "man": "./nij.1",
@@ -8,6 +8,7 @@
     "type": "git",
     "url": "git://github.com/clehner/nij.git"
   },
+  "preferGlobal": true,
   "keywords": [
     "nodeinfo.json",
     "cjdns"
@@ -22,5 +23,11 @@
     "minimist": "^1.2.0",
     "mktemp": "^0.4.0",
     "readline-sync": "^1.2.22"
-  }
+  },
+  "files": [
+    "README.md",
+    "nij.1",
+    "nij.js",
+    "package.json"
+  ]
 }
